@@ -28,12 +28,15 @@ It comprises different size NACA 0012 airfoils at various wind tunnel speeds and
 It is required to install `ucimlrepo` and `pandas` libraries to load and process data.
 
 ```bash
-pip install ucimlrepo pandas scikit-learn matplotlib seaborn scipy
+pip install ucimlrepo pandas scikit-learn matplotlib seaborn scipy mlflow
 ```
 
 ## Model Building and Analysis
 
-This project provides a comprehensive script `regression_analysis.py` that handles the entire pipeline from data loading to model evaluation.
+This project provides two comprehensive analysis scripts:
+
+- `regression_analysis.py`: Standard regression analysis pipeline
+- `regression_analysis_mlflow.py`: **MLFlow-enabled** version with experiment tracking (recommended)
 
 ### Pipeline Steps
 
@@ -53,11 +56,31 @@ This project provides a comprehensive script `regression_analysis.py` that handl
 
 ### Usage
 
-Run the analysis script:
-
+**Standard Analysis:**
 ```bash
 python regression_analysis.py
 ```
+
+**MLFlow-Enabled Analysis (Recommended):**
+```bash
+python regression_analysis_mlflow.py
+```
+
+After running the MLFlow version, launch the MLFlow UI to explore results:
+```bash
+mlflow ui
+```
+Then visit `http://localhost:5000` to view the experiment tracking dashboard.
+
+## MLFlow Features
+
+The MLFlow-enabled version provides:
+
+- **Experiment Tracking**: Automatic logging of all model parameters, metrics, and artifacts
+- **Model Registry**: Versioned model storage with metadata
+- **Visualization Artifacts**: Automatically saved plots (correlation heatmaps, residuals, etc.)
+- **Comparison Dashboard**: Easy comparison between different model runs
+- **Reproducibility**: Complete parameter and environment tracking
 
 
  
