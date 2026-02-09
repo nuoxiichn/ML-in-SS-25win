@@ -1,3 +1,3 @@
 mlruns
-Results_CSV
-Results_PNG
+Results*
+__pycache__
