@@ -16,6 +16,12 @@ from sklearn.model_selection import KFold, cross_val_score, RandomizedSearchCV
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.metrics import make_scorer
 
+import mlflow
+import mlflow.sklearn
+
+# Set MLflow experiment
+mlflow.set_experiment("Airfoil_Noise_Regression_Analysis")
+
 # Function to remove outliers using IQR
 def remove_outliers_iqr(df, column):
     Q1 = df[column].quantile(0.25)

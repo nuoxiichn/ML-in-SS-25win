@@ -1,0 +1,2 @@
+attack-angle - suction-side-displacement-thickness: 0.831
+suction-side-displacement-thickness - attack-angle: 0.831
