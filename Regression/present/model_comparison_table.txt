@@ -1,0 +1,3 @@
+                       Model           Type     RMSE  RMSE_std  R2_Adjusted  R2_Adjusted_std      MAE     MAPE  Training_Time
+               Random Forest Traditional ML 1.816711  0.218014     0.909863         0.020889      NaN      NaN            NaN
+NN_3Layer_100Units_BatchNorm Neural Network 2.121047       NaN     0.893103              NaN 1.508426 0.011988       6.829593
