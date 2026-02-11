@@ -107,6 +107,32 @@ with mlflow.start_run(run_name="Ultimate_Comparison_Parent"):
             model = get_dl_model(name)
             history = model.fit(X_train_dl, y_train_dl, epochs=50, batch_size=32, verbose=0, validation_split=0.1)
             
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+            
+            # 图1：Accuracy 变化
+            ax1.plot(history.history['accuracy'], label='Train Accuracy', color='blue')
+            ax1.plot(history.history['val_accuracy'], label='Test Accuracy', color='orange')
+            ax1.set_title(f'{name} - Accuracy Curves')
+            ax1.set_xlabel('Epochs')
+            ax1.set_ylabel('Accuracy')
+            ax1.legend()
+            ax1.grid(True)
+
+            # 图2：Loss 变化
+            ax2.plot(history.history['loss'], label='Train Loss', color='blue')
+            ax2.plot(history.history['val_loss'], label='Test Loss', color='orange')
+            ax2.set_title(f'{name} - Loss Curves')
+            ax2.set_xlabel('Epochs')
+            ax2.set_ylabel('Loss (Categorical Crossentropy)')
+            ax2.legend()
+            ax2.grid(True)
+
+            plt.tight_layout()
+            curve_plot = f"learning_curves_{name}.png"
+            plt.savefig(curve_plot)
+            mlflow.log_artifact(curve_plot) # 记录到 MLflow
+            plt.close()
+            
             y_pred_dl = np.argmax(model.predict(X_test_dl), axis=1)
             y_true_dl = np.argmax(y_test_dl, axis=1)
             acc = accuracy_score(y_true_dl, y_pred_dl)
