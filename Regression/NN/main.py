@@ -3,8 +3,13 @@
 Airfoil Self-Noise 数据集神经网络回归分析
 """
 import os
+import sys
 import warnings
 import platform
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 import pandas as pd
 import numpy as np
@@ -32,6 +37,7 @@ from nn_config import (
     get_nn_configs,
     log_nn_model_with_mlflow
 )
+from keras.callbacks import EarlyStopping, ReduceLROnPlateau
 
 warnings.filterwarnings("ignore", category=UserWarning)
 np.random.seed(42)
@@ -235,29 +241,69 @@ def main():
             model = build_neural_network(
                 input_dim=n_features,
                 hidden_units=config['hidden_units'],
-                num_layers=config['num_layers']
+                num_layers=config['num_layers'],
+                dropout_rate=config.get('dropout_rate', 0.0),
+                use_batch_norm=config.get('use_batch_norm', False),
+                l2_reg=config.get('l2_reg', 0.0),
+                learning_rate=config.get('learning_rate', 0.001)
             )
             
             # 打印模型结构
             print("\nModel Architecture:")
             model.summary()
             
+            # 准备 callbacks - 所有模型都使用早停和学习率调度
+            callbacks = []
+            
+            # Early Stopping: 当验证损失不再显著下降时提前停止训练
+            # patience=15 表示如果连续15个epoch验证损失没有改善就停止
+            early_stop = EarlyStopping(
+                monitor='val_loss',
+                patience=15,
+                restore_best_weights=True,  # 恢复到最佳权重
+                verbose=1,
+                min_delta=0.0001  # 最小改善阈值
+            )
+            callbacks.append(early_stop)
+            
+            # Learning Rate Scheduler: 当验证损失停滞时降低学习率
+            reduce_lr = ReduceLROnPlateau(
+                monitor='val_loss',
+                factor=0.5,  # 学习率减半
+                patience=8,  # 8个epoch没改善就降低学习率
+                min_lr=1e-7,
+                verbose=1,
+                min_delta=0.0001
+            )
+            callbacks.append(reduce_lr)
+            
             # 训练模型
+            print(f"\nTraining with Early Stopping (patience=15) and LR Scheduler (patience=8)...")
             history = model.fit(
                 X_train_norm,
                 y_train,
                 validation_split=0.3,
                 epochs=config['epochs'],
                 batch_size=config['batch_size'],
+                callbacks=callbacks,
                 verbose=1
             )
             
             # 记录模型和结果
             params = {
-                'hidden_units': config['hidden_units'],
+                'hidden_units': str(config['hidden_units']),
                 'num_layers': config['num_layers'],
-                'epochs': config['epochs'],
+                'dropout_rate': config.get('dropout_rate', 0.0),
+                'use_batch_norm': config.get('use_batch_norm', False),
+                'l2_reg': config.get('l2_reg', 0.0),
+                'learning_rate': config.get('learning_rate', 0.001),
+                'epochs_max': config['epochs'],
+                'epochs_actual': len(history.history['loss']),  # 实际训练的 epoch 数
                 'batch_size': config['batch_size'],
+                'early_stopping': True,
+                'early_stopping_patience': 15,
+                'lr_scheduler': True,
+                'lr_scheduler_patience': 8,
                 'optimizer': 'adam',
                 'loss_function': 'mean_squared_error',
                 'activation': 'relu'
@@ -276,10 +322,14 @@ def main():
             
             results_summary.append({
                 'model': config['name'],
+                'epochs_trained': len(history.history['loss']),
+                'epochs_max': config['epochs'],
+                'early_stopped': len(history.history['loss']) < config['epochs'],
                 **metrics
             })
             
             print(f"\n{config['name']} Results:")
+            print(f"  Epochs: {len(history.history['loss'])}/{config['epochs']} (Early stopped: {len(history.history['loss']) < config['epochs']})")
             print(f"  Test RMSE: {metrics['test_rmse']:.4f}")
             print(f"  Test MAE: {metrics['test_mae']:.4f}")
             print(f"  Test R²: {metrics['test_r2']:.4f}")

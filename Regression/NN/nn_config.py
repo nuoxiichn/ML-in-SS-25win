@@ -3,6 +3,7 @@
 包含模型构建、训练和 MLflow 记录功能
 """
 import os
+import sys
 import time
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,7 +12,15 @@ from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 import mlflow
 import mlflow.keras
 from keras.models import Sequential
-from keras.layers import Dense
+from keras.layers import Dense, Dropout, BatchNormalization
+from keras.regularizers import l2
+from keras.callbacks import EarlyStopping, ReduceLROnPlateau
+from keras.optimizers import Adam
+
+# 添加项目根目录到 Python 路径
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 from Regression.utils import (
     r2_adjusted, 
@@ -21,66 +30,175 @@ from Regression.utils import (
 )
 
 
-def build_neural_network(input_dim, hidden_units=50, num_layers=2):
+def build_neural_network(input_dim, hidden_units=50, num_layers=2, 
+                          dropout_rate=0.0, use_batch_norm=False, 
+                          l2_reg=0.0, learning_rate=0.001):
     """
-    构建神经网络回归模型
+    构建优化的神经网络回归模型
     
     参数:
         input_dim: 输入特征数量
-        hidden_units: 隐藏层神经元数量
+        hidden_units: 隐藏层神经元数量（可以是单个值或列表）
         num_layers: 隐藏层数量
+        dropout_rate: Dropout 比率（0.0 表示不使用）
+        use_batch_norm: 是否使用 Batch Normalization
+        l2_reg: L2 正则化系数（0.0 表示不使用）
+        learning_rate: 学习率
     """
     model = Sequential()
     
+    # 如果 hidden_units 是单个值，创建列表
+    if isinstance(hidden_units, int):
+        units_list = [hidden_units] * num_layers
+    else:
+        units_list = hidden_units[:num_layers]
+    
     # 第一个隐藏层
-    model.add(Dense(hidden_units, activation='relu', input_shape=(input_dim,)))
+    model.add(Dense(
+        units_list[0], 
+        activation='relu', 
+        input_shape=(input_dim,),
+        kernel_regularizer=l2(l2_reg) if l2_reg > 0 else None
+    ))
+    
+    if use_batch_norm:
+        model.add(BatchNormalization())
+    
+    if dropout_rate > 0:
+        model.add(Dropout(dropout_rate))
     
     # 额外的隐藏层
-    for _ in range(num_layers - 1):
-        model.add(Dense(hidden_units, activation='relu'))
+    for i in range(1, num_layers):
+        model.add(Dense(
+            units_list[i], 
+            activation='relu',
+            kernel_regularizer=l2(l2_reg) if l2_reg > 0 else None
+        ))
+        
+        if use_batch_norm:
+            model.add(BatchNormalization())
+        
+        if dropout_rate > 0:
+            model.add(Dropout(dropout_rate))
     
     # 输出层
     model.add(Dense(1))
     
     # 编译模型
-    model.compile(optimizer='adam', loss='mean_squared_error', metrics=['mae'])
+    optimizer = Adam(learning_rate=learning_rate)
+    model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mae'])
     
     return model
 
 
 def get_nn_configs():
     """
-    获取神经网络配置列表
-    可以根据需要修改或扩展配置
+    获取神经网络配置列表（优化版本）
+    包含 Dropout、Batch Normalization、L2 正则化等优化技术
     """
     return [
+        # 保留原始的3层模型作为基线
         {
-            'name': 'NN_2Layer_50Units',
-            'hidden_units': 50,
-            'num_layers': 2,
-            'epochs': 100,
-            'batch_size': 32
-        },
-        {
-            'name': 'NN_3Layer_50Units',
+            'name': 'NN_3Layer_50Units_Baseline',
             'hidden_units': 50,
             'num_layers': 3,
+            'dropout_rate': 0.0,
+            'use_batch_norm': False,
+            'l2_reg': 0.0,
+            'learning_rate': 0.001,
             'epochs': 100,
-            'batch_size': 32
+            'batch_size': 32,
+            'use_callbacks': False
         },
         {
-            'name': 'NN_2Layer_100Units',
-            'hidden_units': 100,
-            'num_layers': 2,
-            'epochs': 100,
-            'batch_size': 32
-        },
-        {
-            'name': 'NN_3Layer_100Units',
+            'name': 'NN_3Layer_100Units_Baseline',
             'hidden_units': 100,
             'num_layers': 3,
+            'dropout_rate': 0.0,
+            'use_batch_norm': False,
+            'l2_reg': 0.0,
+            'learning_rate': 0.001,
             'epochs': 150,
-            'batch_size': 32
+            'batch_size': 32,
+            'use_callbacks': False
+        },
+        # 优化模型：添加 Dropout
+        {
+            'name': 'NN_3Layer_100Units_Dropout',
+            'hidden_units': 100,
+            'num_layers': 3,
+            'dropout_rate': 0.3,
+            'use_batch_norm': False,
+            'l2_reg': 0.0,
+            'learning_rate': 0.001,
+            'epochs': 150,
+            'batch_size': 32,
+            'use_callbacks': True
+        },
+        # 优化模型：添加 Batch Normalization
+        {
+            'name': 'NN_3Layer_100Units_BatchNorm',
+            'hidden_units': 100,
+            'num_layers': 3,
+            'dropout_rate': 0.0,
+            'use_batch_norm': True,
+            'l2_reg': 0.0,
+            'learning_rate': 0.001,
+            'epochs': 150,
+            'batch_size': 32,
+            'use_callbacks': True
+        },
+        # 优化模型：添加 L2 正则化
+        {
+            'name': 'NN_3Layer_100Units_L2Reg',
+            'hidden_units': 100,
+            'num_layers': 3,
+            'dropout_rate': 0.0,
+            'use_batch_norm': False,
+            'l2_reg': 0.01,
+            'learning_rate': 0.001,
+            'epochs': 150,
+            'batch_size': 32,
+            'use_callbacks': True
+        },
+        # 优化模型：组合优化（Dropout + BatchNorm）
+        {
+            'name': 'NN_3Layer_100Units_Dropout_BN',
+            'hidden_units': 100,
+            'num_layers': 3,
+            'dropout_rate': 0.25,
+            'use_batch_norm': True,
+            'l2_reg': 0.0,
+            'learning_rate': 0.001,
+            'epochs': 150,
+            'batch_size': 32,
+            'use_callbacks': True
+        },
+        # 优化模型：全面优化（Dropout + BatchNorm + L2）
+        {
+            'name': 'NN_3Layer_100Units_Full_Optimized',
+            'hidden_units': 100,
+            'num_layers': 3,
+            'dropout_rate': 0.2,
+            'use_batch_norm': True,
+            'l2_reg': 0.001,
+            'learning_rate': 0.001,
+            'epochs': 200,
+            'batch_size': 32,
+            'use_callbacks': True
+        },
+        # 优化模型：递减架构（更深层网络）
+        {
+            'name': 'NN_4Layer_Tapered_Optimized',
+            'hidden_units': [128, 96, 64, 32],
+            'num_layers': 4,
+            'dropout_rate': 0.25,
+            'use_batch_norm': True,
+            'l2_reg': 0.001,
+            'learning_rate': 0.001,
+            'epochs': 200,
+            'batch_size': 32,
+            'use_callbacks': True
         }
     ]
 
